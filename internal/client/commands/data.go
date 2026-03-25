@@ -33,8 +33,8 @@ func AddLoginCmd(a *app.App) *cobra.Command {
 		Use:   "login",
 		Short: "Add login/password pair",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(a.DEK) == 0 {
-				return fmt.Errorf("DEK not initialized, please login first")
+			if err := a.EnsureDEK(); err != nil {
+				return err
 			}
 
 			payload := models.LoginPayload{
@@ -80,8 +80,8 @@ func AddTextCmd(a *app.App) *cobra.Command {
 		Use:   "text",
 		Short: "Add arbitrary text data",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(a.DEK) == 0 {
-				return fmt.Errorf("DEK not initialized, please login first")
+			if err := a.EnsureDEK(); err != nil {
+				return err
 			}
 
 			payload := models.TextPayload{
@@ -124,8 +124,8 @@ func AddBinaryCmd(a *app.App) *cobra.Command {
 		Use:   "binary",
 		Short: "Add binary data from a file",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(a.DEK) == 0 {
-				return fmt.Errorf("DEK not initialized, please login first")
+			if err := a.EnsureDEK(); err != nil {
+				return err
 			}
 
 			fileData, err := readFile(filePath)
@@ -173,8 +173,8 @@ func AddCardCmd(a *app.App) *cobra.Command {
 		Use:   "card",
 		Short: "Add bank card data",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(a.DEK) == 0 {
-				return fmt.Errorf("DEK not initialized, please login first")
+			if err := a.EnsureDEK(); err != nil {
+				return err
 			}
 
 			payload := models.CardPayload{
@@ -237,8 +237,8 @@ func GetCmd(a *app.App) *cobra.Command {
 		Short: "Get and decrypt a record",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(a.DEK) == 0 {
-				return fmt.Errorf("DEK not initialized, please login first")
+			if err := a.EnsureDEK(); err != nil {
+				return err
 			}
 
 			rec := a.Storage.GetRecord(args[0])

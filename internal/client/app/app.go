@@ -3,9 +3,11 @@ package app
 
 import (
 	"context"
+	"fmt"
 
-	pb "github.com/tigranqic/gophkeeper-diploma/internal/proto/gophkeeperv1"
 	"github.com/tigranqic/gophkeeper-diploma/internal/client/storage"
+	pb "github.com/tigranqic/gophkeeper-diploma/internal/proto/gophkeeperv1"
+	"github.com/tigranqic/gophkeeper-diploma/pkg/crypto"
 )
 
 // APIClient defines the interface for communicating with the GophKeeper server.
@@ -31,4 +33,29 @@ type App struct {
 	// ReadPassword reads a password from the user without echoing it to the terminal.
 	// It is injectable so that commands can be unit-tested without a real TTY.
 	ReadPassword func(prompt string) ([]byte, error)
+}
+
+// EnsureDEK checks that the DEK is initialized. If not, it prompts for the
+// master password and re-derives the DEK from the locally stored salt.
+// This is needed because the DEK is never persisted to disk and is lost
+// between CLI invocations.
+func (a *App) EnsureDEK() error {
+	if len(a.DEK) > 0 {
+		return nil
+	}
+	if len(a.Storage.Salt) == 0 {
+		return fmt.Errorf("not registered: please run 'register' first")
+	}
+	masterPass, err := a.ReadPassword("Enter master password: ")
+	if err != nil {
+		return err
+	}
+	defer crypto.Zero(masterPass)
+
+	dek, _, err := crypto.DeriveKeys(string(masterPass), a.Storage.Salt)
+	if err != nil {
+		return err
+	}
+	a.DEK = dek
+	return nil
 }

@@ -56,10 +56,13 @@ func (s *LocalStore) GetRecord(id string) *pb.EncryptedRecord {
 }
 
 // UpsertRecord updates or inserts a record into the local storage.
+// A server-returned record wins if its UpdatedAt is newer OR its Revision is higher
+// (the revision is only assigned server-side, so a higher revision always means
+// a more authoritative version of the record).
 func (s *LocalStore) UpsertRecord(rec *pb.EncryptedRecord) {
 	for i, r := range s.Records {
 		if r.Id == rec.Id {
-			if rec.UpdatedAt > r.UpdatedAt {
+			if rec.UpdatedAt > r.UpdatedAt || rec.Revision > r.Revision {
 				s.Records[i] = rec
 			}
 			return

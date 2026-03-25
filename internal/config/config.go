@@ -24,7 +24,7 @@ type Config struct {
 	LogFormat    string        `yaml:"log_format" env:"LOG_FORMAT" env-default:"text"`
 	ServerAddr   string        `yaml:"address" env:"ADDRESS" env-default:"localhost:8080"`
 	GRPCAddr     string        `yaml:"grpc_address" env:"GRPC_ADDRESS" env-default:"localhost:3200"`
-	DatabaseDSN  string        `yaml:"database_dsn" env:"DATABASE_DSN" env-default:"postgres://postgres:postgres@localhost:5432/gophkeeper?sslmode=disable"`
+	DatabaseDSN  string        `yaml:"database_dsn" env:"DATABASE_DSN" env-default:"postgres://postgres:postgres@localhost:5452/postgres?sslmode=disable"`
 	JWTSecret    string        `yaml:"jwt_secret" env:"JWT_SECRET" env-default:"change-me-in-production"`
 	ReadTimeout  time.Duration `yaml:"read_timeout" env:"READ_TIMEOUT" env-default:"10s"`
 	WriteTimeout time.Duration `yaml:"write_timeout" env:"WRITE_TIMEOUT" env-default:"10s"`
@@ -80,10 +80,6 @@ func Load(args []string) (*Config, error) {
 			cfg.JWTSecret = *fJWTSecret
 		}
 	})
-
-	if err := cleanenv.ReadEnv(&cfg); err != nil {
-		return nil, err
-	}
 
 	cfg.ServerAddr = strings.TrimPrefix(strings.TrimPrefix(cfg.ServerAddr, "https://"), "http://")
 	cfg.GRPCAddr = strings.TrimPrefix(strings.TrimPrefix(cfg.GRPCAddr, "https://"), "http://")

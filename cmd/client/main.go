@@ -1,15 +1,15 @@
 package main
 
 import (
-	"flag"
 	"fmt"
+	"os"
+	"path/filepath"
+
 	"github.com/spf13/cobra"
 	"github.com/tigranqic/gophkeeper-diploma/internal/client/api"
 	"github.com/tigranqic/gophkeeper-diploma/internal/client/app"
 	"github.com/tigranqic/gophkeeper-diploma/internal/client/commands"
 	"github.com/tigranqic/gophkeeper-diploma/internal/client/storage"
-	"os"
-	"path/filepath"
 )
 
 var (
@@ -18,9 +18,6 @@ var (
 )
 
 func main() {
-	serverAddr := flag.String("s", "localhost:3200", "gRPC server address")
-	flag.Parse()
-
 	home, _ := os.UserHomeDir()
 	storePath := filepath.Join(home, ".gophkeeper.json")
 
@@ -30,14 +27,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	client, err := api.NewClient(*serverAddr, store.Token)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to create client: %v\n", err)
-		os.Exit(1)
-	}
+	var serverAddr string
 
 	application := &app.App{
-		Client:       client,
 		Storage:      store,
 		ReadPassword: commands.ReadPassword,
 	}
@@ -45,6 +37,17 @@ func main() {
 	var rootCmd = &cobra.Command{
 		Use:   "gophkeeper",
 		Short: "GophKeeper is a secure password manager",
+	}
+
+	rootCmd.PersistentFlags().StringVarP(&serverAddr, "server", "s", "localhost:3200", "gRPC server address")
+
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		client, err := api.NewClient(serverAddr, store.Token)
+		if err != nil {
+			return fmt.Errorf("failed to create client: %w", err)
+		}
+		application.Client = client
+		return nil
 	}
 
 	rootCmd.AddCommand(&cobra.Command{

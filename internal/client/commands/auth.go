@@ -5,11 +5,12 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"os"
+
 	"github.com/spf13/cobra"
 	"github.com/tigranqic/gophkeeper-diploma/internal/client/app"
 	"github.com/tigranqic/gophkeeper-diploma/pkg/crypto"
 	"golang.org/x/term"
-	"os"
 )
 
 // ReadPassword reads a password from the terminal without echoing.
@@ -31,12 +32,6 @@ func RegisterCmd(a *app.App) *cobra.Command {
 		Use:   "register",
 		Short: "Register a new user",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			password, err := a.ReadPassword("Enter password: ")
-			if err != nil {
-				return err
-			}
-			defer crypto.Zero(password)
-
 			masterPass, err := a.ReadPassword("Enter master password: ")
 			if err != nil {
 				return err
