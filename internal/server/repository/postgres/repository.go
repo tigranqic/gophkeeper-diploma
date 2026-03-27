@@ -39,14 +39,15 @@ func NewPostgresRepository(ctx context.Context, dsn string, log *zap.Logger) (*P
 
 // CreateUser inserts a new user row and returns the created User with its generated UUID.
 // Returns ErrDuplicateUsername if the username is already taken.
-func (r *PostgresRepository) CreateUser(ctx context.Context, username, passwordHash string) (*repository.User, error) {
+func (r *PostgresRepository) CreateUser(ctx context.Context, username, passwordHash string, salt []byte) (*repository.User, error) {
 	user := &repository.User{
 		Username:     username,
 		PasswordHash: passwordHash,
+		Salt:         salt,
 	}
 
-	query := `INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING id`
-	err := r.pool.QueryRow(ctx, query, username, passwordHash).Scan(&user.ID)
+	query := `INSERT INTO users (username, password_hash, salt) VALUES ($1, $2, $3) RETURNING id`
+	err := r.pool.QueryRow(ctx, query, username, passwordHash, salt).Scan(&user.ID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -57,6 +58,22 @@ func (r *PostgresRepository) CreateUser(ctx context.Context, username, passwordH
 	}
 
 	return user, nil
+}
+
+// GetSaltByUsername returns the scrypt salt stored for the given username.
+// Returns (nil, nil) when no matching user exists.
+func (r *PostgresRepository) GetSaltByUsername(ctx context.Context, username string) ([]byte, error) {
+	var salt []byte
+	query := `SELECT salt FROM users WHERE username = $1`
+	err := r.pool.QueryRow(ctx, query, username).Scan(&salt)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		r.log.Error("failed to get salt", zap.Error(err), zap.String("username", username))
+		return nil, fmt.Errorf("internal database error")
+	}
+	return salt, nil
 }
 
 // GetUserByUsername fetches a user by their unique username.
@@ -84,7 +101,7 @@ func (r *PostgresRepository) SyncRecords(ctx context.Context, userID uuid.UUID, 
 	if err != nil {
 		return nil, 0, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// Upsert incoming records
 	for _, rec := range records {
@@ -97,7 +114,8 @@ func (r *PostgresRepository) SyncRecords(ctx context.Context, userID uuid.UUID, 
 			    updated_at = EXCLUDED.updated_at,
 			    is_deleted = EXCLUDED.is_deleted,
 			    revision = DEFAULT -- This triggers BIGSERIAL increment
-			WHERE EXCLUDED.updated_at > records.updated_at
+			WHERE records.user_id = $2
+			  AND EXCLUDED.updated_at > records.updated_at
 		`
 		_, err := tx.Exec(ctx, query,
 			rec.Id,
@@ -127,7 +145,7 @@ func (r *PostgresRepository) SyncRecords(ctx context.Context, userID uuid.UUID, 
 	defer rows.Close()
 
 	var updates []*gophkeeperv1.EncryptedRecord
-	var maxRevision int64 = lastRevision
+	maxRevision := lastRevision
 
 	for rows.Next() {
 		var rec gophkeeperv1.EncryptedRecord

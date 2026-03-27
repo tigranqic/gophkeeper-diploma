@@ -24,6 +24,10 @@ func (f *fakeAuthService) Register(_ context.Context, req *pb.RegisterRequest) (
 	return &pb.RegisterResponse{Token: "register-token-for-" + req.Username}, nil
 }
 
+func (f *fakeAuthService) GetSalt(_ context.Context, req *pb.GetSaltRequest) (*pb.GetSaltResponse, error) {
+	return &pb.GetSaltResponse{Salt: []byte("salt-for-" + req.Username)}, nil
+}
+
 func (f *fakeAuthService) Login(_ context.Context, req *pb.LoginRequest) (*pb.LoginResponse, error) {
 	return &pb.LoginResponse{Token: "login-token-for-" + req.Username}, nil
 }
@@ -48,7 +52,7 @@ func startBufconnServer(t *testing.T) func(context.Context, string) (net.Conn, e
 	pb.RegisterAuthServiceServer(srv, &fakeAuthService{})
 	pb.RegisterStorageServiceServer(srv, &fakeStorageService{})
 
-	go srv.Serve(lis)
+	go func() { _ = srv.Serve(lis) }()
 	t.Cleanup(func() { srv.Stop() })
 
 	return func(ctx context.Context, _ string) (net.Conn, error) {
@@ -65,7 +69,7 @@ func newTestClient(t *testing.T) *Client {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	require.NoError(t, err)
-	t.Cleanup(func() { conn.Close() })
+	t.Cleanup(func() { _ = conn.Close() })
 
 	return &Client{
 		authClient:    pb.NewAuthServiceClient(conn),
@@ -75,9 +79,16 @@ func newTestClient(t *testing.T) *Client {
 
 func TestClient_Register(t *testing.T) {
 	c := newTestClient(t)
-	token, err := c.Register(context.Background(), "alice", "hash")
+	token, err := c.Register(context.Background(), "alice", "hash", []byte("test-salt"))
 	require.NoError(t, err)
 	assert.Equal(t, "register-token-for-alice", token)
+}
+
+func TestClient_GetSalt(t *testing.T) {
+	c := newTestClient(t)
+	salt, err := c.GetSalt(context.Background(), "alice")
+	require.NoError(t, err)
+	assert.Equal(t, []byte("salt-for-alice"), salt)
 }
 
 func TestClient_Login(t *testing.T) {

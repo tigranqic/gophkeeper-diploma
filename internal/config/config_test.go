@@ -9,10 +9,10 @@ import (
 )
 
 func TestConfig_LoadEnv(t *testing.T) {
-	os.Setenv("ADDRESS", "localhost:9999")
-	os.Setenv("LOG_LEVEL", "debug")
-	defer os.Unsetenv("ADDRESS")
-	defer os.Unsetenv("LOG_LEVEL")
+	require.NoError(t, os.Setenv("ADDRESS", "localhost:9999"))
+	require.NoError(t, os.Setenv("LOG_LEVEL", "debug"))
+	defer func() { _ = os.Unsetenv("ADDRESS") }()
+	defer func() { _ = os.Unsetenv("LOG_LEVEL") }()
 
 	cfg, err := Load([]string{})
 	require.NoError(t, err)
@@ -30,10 +30,10 @@ func TestConfig_LoadFlags(t *testing.T) {
 
 func TestConfig_Defaults(t *testing.T) {
 	// Ensure no env vars leak from other tests.
-	os.Unsetenv("ADDRESS")
-	os.Unsetenv("GRPC_ADDRESS")
-	os.Unsetenv("LOG_LEVEL")
-	os.Unsetenv("JWT_SECRET")
+	_ = os.Unsetenv("ADDRESS")
+	_ = os.Unsetenv("GRPC_ADDRESS")
+	_ = os.Unsetenv("LOG_LEVEL")
+	_ = os.Unsetenv("JWT_SECRET")
 
 	cfg, err := Load([]string{})
 	require.NoError(t, err)
@@ -57,8 +57,8 @@ func TestConfig_JWTSecretFlag(t *testing.T) {
 }
 
 func TestConfig_JWTSecretEnv(t *testing.T) {
-	os.Setenv("JWT_SECRET", "env-secret")
-	defer os.Unsetenv("JWT_SECRET")
+	require.NoError(t, os.Setenv("JWT_SECRET", "env-secret"))
+	defer func() { _ = os.Unsetenv("JWT_SECRET") }()
 
 	cfg, err := Load([]string{})
 	require.NoError(t, err)

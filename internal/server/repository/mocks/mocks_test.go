@@ -11,19 +11,31 @@ import (
 	"github.com/tigranqic/gophkeeper-diploma/internal/server/repository"
 )
 
-func TestMockRepository_CreateUser(t *testing.T) {
-	m := new(MockRepository)
+func TestMockUserRepository_CreateUser(t *testing.T) {
+	m := new(MockUserRepository)
+	salt := []byte("test-salt")
 	expected := &repository.User{ID: uuid.New(), Username: "alice"}
-	m.On("CreateUser", mock.Anything, "alice", "hash").Return(expected, nil)
+	m.On("CreateUser", mock.Anything, "alice", "hash", salt).Return(expected, nil)
 
-	got, err := m.CreateUser(context.Background(), "alice", "hash")
+	got, err := m.CreateUser(context.Background(), "alice", "hash", salt)
 	assert.NoError(t, err)
 	assert.Equal(t, expected, got)
 	m.AssertExpectations(t)
 }
 
-func TestMockRepository_GetUserByUsername(t *testing.T) {
-	m := new(MockRepository)
+func TestMockUserRepository_GetSaltByUsername(t *testing.T) {
+	m := new(MockUserRepository)
+	salt := []byte("test-salt")
+	m.On("GetSaltByUsername", mock.Anything, "alice").Return(salt, nil)
+
+	got, err := m.GetSaltByUsername(context.Background(), "alice")
+	assert.NoError(t, err)
+	assert.Equal(t, salt, got)
+	m.AssertExpectations(t)
+}
+
+func TestMockUserRepository_GetUserByUsername(t *testing.T) {
+	m := new(MockUserRepository)
 	expected := &repository.User{ID: uuid.New(), Username: "bob"}
 	m.On("GetUserByUsername", mock.Anything, "bob").Return(expected, nil)
 
@@ -33,8 +45,8 @@ func TestMockRepository_GetUserByUsername(t *testing.T) {
 	m.AssertExpectations(t)
 }
 
-func TestMockRepository_SyncRecords(t *testing.T) {
-	m := new(MockRepository)
+func TestMockRecordRepository_SyncRecords(t *testing.T) {
+	m := new(MockRecordRepository)
 	userID := uuid.New()
 	records := []*pb.EncryptedRecord{{Id: "1"}}
 	expected := []*pb.EncryptedRecord{{Id: "2"}}

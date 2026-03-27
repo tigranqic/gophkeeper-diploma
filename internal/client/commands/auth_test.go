@@ -15,14 +15,21 @@ import (
 
 // mockAPIClient is a test double for app.APIClient.
 type mockAPIClient struct {
-	registerFn func(ctx context.Context, username, passwordHash string) (string, error)
+	registerFn func(ctx context.Context, username, passwordHash string, salt []byte) (string, error)
+	getSaltFn  func(ctx context.Context, username string) ([]byte, error)
 	loginFn    func(ctx context.Context, username, passwordHash string) (string, error)
 	setTokenFn func(token string)
 	syncFn     func(ctx context.Context, records []*pb.EncryptedRecord, lastRevision int64) ([]*pb.EncryptedRecord, int64, error)
 }
 
-func (m *mockAPIClient) Register(ctx context.Context, username, passwordHash string) (string, error) {
-	return m.registerFn(ctx, username, passwordHash)
+func (m *mockAPIClient) Register(ctx context.Context, username, passwordHash string, salt []byte) (string, error) {
+	return m.registerFn(ctx, username, passwordHash, salt)
+}
+func (m *mockAPIClient) GetSalt(ctx context.Context, username string) ([]byte, error) {
+	if m.getSaltFn != nil {
+		return m.getSaltFn(ctx, username)
+	}
+	return []byte("16-byte-salt-xxx"), nil
 }
 func (m *mockAPIClient) Login(ctx context.Context, username, passwordHash string) (string, error) {
 	return m.loginFn(ctx, username, passwordHash)
@@ -38,12 +45,13 @@ func (m *mockAPIClient) Sync(ctx context.Context, records []*pb.EncryptedRecord,
 	}
 	return nil, 0, nil
 }
+func (m *mockAPIClient) Close() error { return nil }
 
 func newTestApp(t *testing.T, client app.APIClient) (*app.App, string) {
 	t.Helper()
 	tmp, err := os.CreateTemp("", "gophkeeper_cmd_test_*.json")
 	require.NoError(t, err)
-	t.Cleanup(func() { os.Remove(tmp.Name()) })
+	t.Cleanup(func() { _ = os.Remove(tmp.Name()) })
 
 	store, err := storage.Load(tmp.Name())
 	require.NoError(t, err)
@@ -67,7 +75,7 @@ func newTestApp(t *testing.T, client app.APIClient) (*app.App, string) {
 
 func TestRegisterCmd_Success(t *testing.T) {
 	client := &mockAPIClient{
-		registerFn: func(_ context.Context, username, _ string) (string, error) {
+		registerFn: func(_ context.Context, username, _ string, _ []byte) (string, error) {
 			assert.Equal(t, "alice", username)
 			return "jwt-token", nil
 		},
@@ -84,7 +92,7 @@ func TestRegisterCmd_Success(t *testing.T) {
 
 func TestRegisterCmd_ServerError(t *testing.T) {
 	client := &mockAPIClient{
-		registerFn: func(_ context.Context, _, _ string) (string, error) {
+		registerFn: func(_ context.Context, _, _ string, _ []byte) (string, error) {
 			return "", errors.New("server error")
 		},
 	}

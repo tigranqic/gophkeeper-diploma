@@ -6,6 +6,7 @@ option go_package = "github.com/tigranqic/gophkeeper-diploma/internal/proto/goph
 
 service AuthService {
   rpc Register(RegisterRequest) returns (RegisterResponse);
+  rpc GetSalt(GetSaltRequest) returns (GetSaltResponse);
   rpc Login(LoginRequest) returns (LoginResponse);
 }
 
@@ -17,6 +18,15 @@ service StorageService {
 message RegisterRequest {
   string username = 1;
   string password_hash = 2;
+  bytes salt = 3;
+}
+
+message GetSaltRequest {
+  string username = 1;
+}
+
+message GetSaltResponse {
+  bytes salt = 1;
 }
 
 message RegisterResponse {

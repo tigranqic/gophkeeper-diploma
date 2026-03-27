@@ -18,12 +18,12 @@ import (
 
 func TestAuthService_Register_Table(t *testing.T) {
 	tests := []struct {
-		name          string
-		username      string
-		password      string
-		repoResult    *repository.User
-		repoError     error
-		expectedCode  codes.Code
+		name         string
+		username     string
+		password     string
+		repoResult   *repository.User
+		repoError    error
+		expectedCode codes.Code
 	}{
 		{
 			name:         "Success",
@@ -43,14 +43,15 @@ func TestAuthService_Register_Table(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockRepo := new(mocks.MockRepository)
-			server := NewServer(mockRepo, "secret", zap.NewNop())
+			mockUsers := new(mocks.MockUserRepository)
+			mockRecords := new(mocks.MockRecordRepository)
+			server := NewServer(mockUsers, mockRecords, WithJWTSecret("secret"), WithLogger(zap.NewNop()))
 
 			if tt.expectedCode == codes.OK || tt.name == "Internal Error" {
-				mockRepo.On("CreateUser", mock.Anything, tt.username, mock.Anything).Return(tt.repoResult, tt.repoError)
+				mockUsers.On("CreateUser", mock.Anything, tt.username, mock.Anything, mock.Anything).Return(tt.repoResult, tt.repoError)
 			}
 
-			req := &pb.RegisterRequest{Username: tt.username, PasswordHash: tt.password}
+			req := &pb.RegisterRequest{Username: tt.username, PasswordHash: tt.password, Salt: []byte("test-salt-1234567")}
 			res, err := server.Register(context.Background(), req)
 
 			if tt.expectedCode == codes.OK {
@@ -67,7 +68,8 @@ func TestAuthService_Register_Table(t *testing.T) {
 
 func TestAuthService_Login_Table(t *testing.T) {
 	password := "pass1"
-	hashed, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	require.NoError(t, err)
 
 	tests := []struct {
 		name         string
@@ -102,10 +104,11 @@ func TestAuthService_Login_Table(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockRepo := new(mocks.MockRepository)
-			server := NewServer(mockRepo, "secret", zap.NewNop())
+			mockUsers := new(mocks.MockUserRepository)
+			mockRecords := new(mocks.MockRecordRepository)
+			server := NewServer(mockUsers, mockRecords, WithJWTSecret("secret"), WithLogger(zap.NewNop()))
 
-			mockRepo.On("GetUserByUsername", mock.Anything, tt.username).Return(tt.repoUser, tt.repoError)
+			mockUsers.On("GetUserByUsername", mock.Anything, tt.username).Return(tt.repoUser, tt.repoError)
 
 			req := &pb.LoginRequest{Username: tt.username, PasswordHash: tt.password}
 			res, err := server.Login(context.Background(), req)

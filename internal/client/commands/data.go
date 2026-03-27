@@ -2,14 +2,18 @@ package commands
 
 import (
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"slices"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"github.com/tigranqic/gophkeeper-diploma/internal/client/app"
 	"github.com/tigranqic/gophkeeper-diploma/internal/client/models"
 	pb "github.com/tigranqic/gophkeeper-diploma/internal/proto/gophkeeperv1"
 	"github.com/tigranqic/gophkeeper-diploma/pkg/crypto"
-	"os"
-	"time"
 )
 
 // AddCmd returns the parent 'add' command with data-type sub-commands.
@@ -68,8 +72,12 @@ func AddLoginCmd(a *app.App) *cobra.Command {
 	cmd.Flags().StringVar(&login, "login", "", "login")
 	cmd.Flags().StringVar(&pass, "pass", "", "password")
 	cmd.Flags().StringVar(&meta, "meta", "", "metadata")
-	cmd.MarkFlagRequired("login")
-	cmd.MarkFlagRequired("pass")
+	if err := cmd.MarkFlagRequired("login"); err != nil {
+		panic(err)
+	}
+	if err := cmd.MarkFlagRequired("pass"); err != nil {
+		panic(err)
+	}
 	return cmd
 }
 
@@ -113,7 +121,9 @@ func AddTextCmd(a *app.App) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&text, "text", "", "text content")
 	cmd.Flags().StringVar(&meta, "meta", "", "metadata")
-	cmd.MarkFlagRequired("text")
+	if err := cmd.MarkFlagRequired("text"); err != nil {
+		panic(err)
+	}
 	return cmd
 }
 
@@ -162,7 +172,9 @@ func AddBinaryCmd(a *app.App) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&filePath, "file", "", "path to file")
 	cmd.Flags().StringVar(&meta, "meta", "", "metadata")
-	cmd.MarkFlagRequired("file")
+	if err := cmd.MarkFlagRequired("file"); err != nil {
+		panic(err)
+	}
 	return cmd
 }
 
@@ -212,8 +224,12 @@ func AddCardCmd(a *app.App) *cobra.Command {
 	cmd.Flags().StringVar(&cvc, "cvc", "", "CVC code")
 	cmd.Flags().StringVar(&holder, "holder", "", "card holder name")
 	cmd.Flags().StringVar(&meta, "meta", "", "metadata")
-	cmd.MarkFlagRequired("number")
-	cmd.MarkFlagRequired("expiry")
+	if err := cmd.MarkFlagRequired("number"); err != nil {
+		panic(err)
+	}
+	if err := cmd.MarkFlagRequired("expiry"); err != nil {
+		panic(err)
+	}
 	return cmd
 }
 
@@ -223,8 +239,12 @@ func ListCmd(a *app.App) *cobra.Command {
 		Use:   "list",
 		Short: "List all records",
 		Run: func(cmd *cobra.Command, args []string) {
-			for _, r := range a.Storage.Records {
-				fmt.Printf("ID: %s | Type: %s | Revision: %d | Updated: %s\n", r.Id, r.Type, r.Revision, time.UnixMilli(r.UpdatedAt).Format(time.RFC3339))
+			for r := range a.Storage.All() {
+				if r.IsDeleted {
+					continue
+				}
+				fmt.Printf("ID: %s | Type: %s | Revision: %d | Updated: %s\n",
+					r.Id, r.Type, r.Revision, time.UnixMilli(r.UpdatedAt).Format(time.RFC3339))
 			}
 		},
 	}
@@ -284,7 +304,7 @@ func SyncCmd(a *app.App) *cobra.Command {
 		Use:   "sync",
 		Short: "Sync records with server",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			updates, lastRev, err := a.Client.Sync(cmd.Context(), a.Storage.Records, a.Storage.LastRevision)
+			updates, lastRev, err := a.Client.Sync(cmd.Context(), slices.Collect(a.Storage.All()), a.Storage.LastRevision)
 			if err != nil {
 				return err
 			}
@@ -298,7 +318,22 @@ func SyncCmd(a *app.App) *cobra.Command {
 	}
 }
 
-// readFile reads and returns the contents of the file at path.
+// readFile reads the file at path using os.Root to prevent symlink/TOCTOU attacks.
 func readFile(path string) ([]byte, error) {
-	return os.ReadFile(path)
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	root, err := os.OpenRoot(filepath.Dir(absPath))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+
+	f, err := root.Open(filepath.Base(absPath))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	return io.ReadAll(f)
 }

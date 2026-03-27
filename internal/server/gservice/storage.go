@@ -22,7 +22,7 @@ func (s *Server) Sync(req *pb.SyncRequest, stream pb.StorageService_SyncServer) 
 		return status.Error(codes.Internal, "invalid user id")
 	}
 
-	updates, maxRevision, err := s.repo.SyncRecords(ctx, userID, req.Records, req.LastRevision)
+	updates, maxRevision, err := s.records.SyncRecords(ctx, userID, req.Records, req.LastRevision)
 	if err != nil {
 		return status.Error(codes.Internal, "failed to sync records")
 	}

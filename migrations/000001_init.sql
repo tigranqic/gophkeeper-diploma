@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS records (
     user_id UUID NOT NULL REFERENCES users(id),
     type INTEGER NOT NULL,
     blob BYTEA NOT NULL,
-    revision BIGSERIAL NOT NULL, -- Auto-incrementing server-side revision
+    revision BIGSERIAL NOT NULL,
     updated_at BIGINT NOT NULL,
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT now()
@@ -26,3 +26,11 @@ CREATE INDEX IF NOT EXISTS idx_records_user_id ON records(user_id);
 CREATE INDEX IF NOT EXISTS idx_records_revision ON records(revision);
 -- +goose StatementEnd
 
+-- +goose Down
+-- +goose StatementBegin
+DROP TABLE IF EXISTS records;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+DROP TABLE IF EXISTS users;
+-- +goose StatementEnd

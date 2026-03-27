@@ -50,20 +50,24 @@ func RegisterCmd(a *app.App) *cobra.Command {
 			defer crypto.Zero(dek)
 			defer crypto.Zero(authPass)
 
-			token, err := a.Client.Register(context.Background(), username, fmt.Sprintf("%x", authPass))
+			token, err := a.Client.Register(context.Background(), username, fmt.Sprintf("%x", authPass), salt)
 			if err != nil {
 				return err
 			}
 
 			a.Storage.Token = token
 			a.Storage.Salt = salt
+			a.Storage.Records = nil
+			a.Storage.LastRevision = 0
 			a.DEK = make([]byte, len(dek))
 			copy(a.DEK, dek)
 			return a.Storage.Save()
 		},
 	}
 	cmd.Flags().StringVarP(&username, "user", "u", "", "username")
-	cmd.MarkFlagRequired("user")
+	if err := cmd.MarkFlagRequired("user"); err != nil {
+		panic(err)
+	}
 	return cmd
 }
 
@@ -80,7 +84,12 @@ func LoginCmd(a *app.App) *cobra.Command {
 			}
 			defer crypto.Zero(masterPass)
 
-			dek, authPass, err := crypto.DeriveKeys(string(masterPass), a.Storage.Salt)
+			salt, err := a.Client.GetSalt(context.Background(), username)
+			if err != nil {
+				return fmt.Errorf("failed to get salt: %w", err)
+			}
+
+			dek, authPass, err := crypto.DeriveKeys(string(masterPass), salt)
 			if err != nil {
 				return err
 			}
@@ -93,6 +102,9 @@ func LoginCmd(a *app.App) *cobra.Command {
 			}
 
 			a.Storage.Token = token
+			a.Storage.Salt = salt
+			a.Storage.Records = nil
+			a.Storage.LastRevision = 0
 			a.DEK = make([]byte, len(dek))
 			copy(a.DEK, dek)
 			a.Client.SetToken(token)
@@ -100,6 +112,8 @@ func LoginCmd(a *app.App) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVarP(&username, "user", "u", "", "username")
-	cmd.MarkFlagRequired("user")
+	if err := cmd.MarkFlagRequired("user"); err != nil {
+		panic(err)
+	}
 	return cmd
 }

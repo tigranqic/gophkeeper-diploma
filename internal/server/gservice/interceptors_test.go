@@ -19,16 +19,18 @@ import (
 const testSecret = "test-jwt-secret"
 
 func makeServer() *Server {
-	return NewServer(new(mocks.MockRepository), testSecret, zap.NewNop())
+	return NewServer(new(mocks.MockUserRepository), new(mocks.MockRecordRepository), WithJWTSecret(testSecret), WithLogger(zap.NewNop()))
 }
 
-func makeValidToken(secret string) string {
+func makeValidToken(t *testing.T, secret string) string {
+	t.Helper()
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id": "00000000-0000-0000-0000-000000000001",
 		"exp":     time.Now().Add(time.Hour).Unix(),
 	})
-	t, _ := token.SignedString([]byte(secret))
-	return t
+	signed, err := token.SignedString([]byte(secret))
+	require.NoError(t, err)
+	return signed
 }
 
 // noopUnaryHandler is a dummy gRPC unary handler that always succeeds.
@@ -81,7 +83,7 @@ func TestAuthInterceptor_InvalidToken(t *testing.T) {
 func TestAuthInterceptor_ValidToken(t *testing.T) {
 	s := makeServer()
 	info := &grpc.UnaryServerInfo{FullMethod: "/gophkeeper.v1.StorageService/Sync"}
-	token := makeValidToken(testSecret)
+	token := makeValidToken(t, testSecret)
 	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "Bearer "+token))
 
 	var capturedCtx context.Context
@@ -96,6 +98,25 @@ func TestAuthInterceptor_ValidToken(t *testing.T) {
 	assert.NotNil(t, capturedCtx.Value(userIDKey))
 }
 
+func TestAuthInterceptor_AlgNoneAttack(t *testing.T) {
+	s := makeServer()
+	info := &grpc.UnaryServerInfo{FullMethod: "/gophkeeper.v1.StorageService/Sync"}
+
+	// Craft a token that uses alg:"none" (unsigned). The library should reject it
+	// even though the claims look valid, because WithValidMethods rejects "none".
+	unsignedToken := jwt.NewWithClaims(jwt.SigningMethodNone, jwt.MapClaims{
+		"user_id": "00000000-0000-0000-0000-000000000001",
+		"exp":     time.Now().Add(time.Hour).Unix(),
+	})
+	tokenStr, err := unsignedToken.SignedString(jwt.UnsafeAllowNoneSignatureType)
+	require.NoError(t, err)
+
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "Bearer "+tokenStr))
+	_, err = s.AuthInterceptor(ctx, nil, info, noopUnaryHandler)
+	require.Error(t, err)
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
 func TestStreamAuthInterceptor_MissingMetadata(t *testing.T) {
 	s := makeServer()
 	stream := &mockSyncServer{ctx: context.Background()}
@@ -108,7 +129,7 @@ func TestStreamAuthInterceptor_MissingMetadata(t *testing.T) {
 
 func TestStreamAuthInterceptor_ValidToken(t *testing.T) {
 	s := makeServer()
-	token := makeValidToken(testSecret)
+	token := makeValidToken(t, testSecret)
 	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "Bearer "+token))
 	stream := &mockSyncServer{ctx: ctx}
 

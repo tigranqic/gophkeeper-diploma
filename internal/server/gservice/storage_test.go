@@ -16,9 +16,9 @@ import (
 // mockSyncServer implements pb.StorageService_SyncServer for testing.
 type mockSyncServer struct {
 	grpc.ServerStream
-	ctx      context.Context
-	sent     []*pb.SyncResponse
-	sendErr  error
+	ctx     context.Context
+	sent    []*pb.SyncResponse
+	sendErr error
 }
 
 func (m *mockSyncServer) Context() context.Context {
@@ -34,8 +34,9 @@ func (m *mockSyncServer) Send(res *pb.SyncResponse) error {
 }
 
 func TestStorageService_Sync_Unauthenticated(t *testing.T) {
-	mockRepo := new(mocks.MockRepository)
-	server := NewServer(mockRepo, "test-secret", zap.NewNop())
+	mockUsers := new(mocks.MockUserRepository)
+	mockRecords := new(mocks.MockRecordRepository)
+	server := NewServer(mockUsers, mockRecords, WithJWTSecret("test-secret"), WithLogger(zap.NewNop()))
 
 	// Context without user_id → should return Unauthenticated.
 	stream := &mockSyncServer{ctx: context.Background()}
@@ -44,13 +45,14 @@ func TestStorageService_Sync_Unauthenticated(t *testing.T) {
 }
 
 func TestStorageService_Sync_EmptyUpdates(t *testing.T) {
-	mockRepo := new(mocks.MockRepository)
-	server := NewServer(mockRepo, "test-secret", zap.NewNop())
+	mockUsers := new(mocks.MockUserRepository)
+	mockRecords := new(mocks.MockRecordRepository)
+	server := NewServer(mockUsers, mockRecords, WithJWTSecret("test-secret"), WithLogger(zap.NewNop()))
 
 	userID := uuid.New()
 	ctx := context.WithValue(context.Background(), userIDKey, userID.String())
 
-	mockRepo.On("SyncRecords", mock.Anything, userID, mock.Anything, int64(0)).
+	mockRecords.On("SyncRecords", mock.Anything, userID, mock.Anything, int64(0)).
 		Return([]*pb.EncryptedRecord{}, int64(7), nil)
 
 	stream := &mockSyncServer{ctx: ctx}
@@ -58,12 +60,13 @@ func TestStorageService_Sync_EmptyUpdates(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, stream.sent, 1)
 	assert.Equal(t, int64(7), stream.sent[0].CurrentRevision)
-	mockRepo.AssertExpectations(t)
+	mockRecords.AssertExpectations(t)
 }
 
 func TestStorageService_Sync(t *testing.T) {
-	mockRepo := new(mocks.MockRepository)
-	server := NewServer(mockRepo, "test-secret", zap.NewNop())
+	mockUsers := new(mocks.MockUserRepository)
+	mockRecords := new(mocks.MockRecordRepository)
+	server := NewServer(mockUsers, mockRecords, WithJWTSecret("test-secret"), WithLogger(zap.NewNop()))
 
 	userID := uuid.New()
 	ctx := context.WithValue(context.Background(), userIDKey, userID.String())
@@ -73,7 +76,7 @@ func TestStorageService_Sync(t *testing.T) {
 	}
 	lastRevision := int64(5)
 
-	mockRepo.On("SyncRecords", mock.Anything, userID, records, lastRevision).Return([]*pb.EncryptedRecord{
+	mockRecords.On("SyncRecords", mock.Anything, userID, records, lastRevision).Return([]*pb.EncryptedRecord{
 		{Id: "2", UpdatedAt: 150, Revision: 10},
 	}, int64(10), nil)
 
@@ -89,5 +92,5 @@ func TestStorageService_Sync(t *testing.T) {
 	assert.Len(t, stream.sent, 1)
 	assert.Equal(t, int64(10), stream.sent[0].CurrentRevision)
 	assert.Equal(t, "2", stream.sent[0].Records[0].Id)
-	mockRepo.AssertExpectations(t)
+	mockRecords.AssertExpectations(t)
 }

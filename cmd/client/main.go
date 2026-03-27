@@ -18,7 +18,11 @@ var (
 )
 
 func main() {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to get home directory: %v\n", err)
+		os.Exit(1)
+	}
 	storePath := filepath.Join(home, ".gophkeeper.json")
 
 	store, err := storage.Load(storePath)
@@ -42,11 +46,18 @@ func main() {
 	rootCmd.PersistentFlags().StringVarP(&serverAddr, "server", "s", "localhost:3200", "gRPC server address")
 
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		client, err := api.NewClient(serverAddr, store.Token)
+		client, err := api.NewClient(serverAddr, api.WithToken(store.Token))
 		if err != nil {
 			return fmt.Errorf("failed to create client: %w", err)
 		}
 		application.Client = client
+		return nil
+	}
+
+	rootCmd.PersistentPostRunE = func(cmd *cobra.Command, args []string) error {
+		if application.Client != nil {
+			return application.Client.Close()
+		}
 		return nil
 	}
 

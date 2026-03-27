@@ -32,8 +32,11 @@ func (w *wrappedStream) Context() context.Context {
 // AuthInterceptor is a gRPC unary server interceptor that validates JWT tokens.
 // Register and Login endpoints are exempt from authentication.
 func (s *Server) AuthInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	// Skip auth for Register and Login
-	if info.FullMethod == "/gophkeeper.v1.AuthService/Register" || info.FullMethod == "/gophkeeper.v1.AuthService/Login" {
+	// Skip auth for public endpoints (Register, GetSalt, Login).
+	switch info.FullMethod {
+	case "/gophkeeper.v1.AuthService/Register",
+		"/gophkeeper.v1.AuthService/GetSalt",
+		"/gophkeeper.v1.AuthService/Login":
 		return handler(ctx, req)
 	}
 
@@ -68,9 +71,19 @@ func (s *Server) authorize(ctx context.Context) (context.Context, error) {
 	}
 
 	tokenStr := strings.TrimPrefix(authHeader[0], "Bearer ")
-	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
-		return []byte(s.jwtSecret), nil
-	})
+	// jwt.WithValidMethods guards against algorithm-confusion attacks:
+	// an attacker cannot forge a token by switching to alg:"none" or
+	// using the server's public key as an HMAC secret (RS256→HS256 confusion).
+	token, err := jwt.Parse(tokenStr,
+		func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, status.Errorf(codes.Unauthenticated,
+					"unexpected signing method: %v", token.Header["alg"])
+			}
+			return []byte(s.jwtSecret), nil
+		},
+		jwt.WithValidMethods([]string{"HS256", "HS384", "HS512"}),
+	)
 
 	if err != nil || !token.Valid {
 		return nil, status.Error(codes.Unauthenticated, "invalid token")

@@ -16,7 +16,7 @@ func newTestAppWithDEK(t *testing.T) *app.App {
 	t.Helper()
 	tmp, err := os.CreateTemp("", "gophkeeper_data_test_*.json")
 	require.NoError(t, err)
-	t.Cleanup(func() { os.Remove(tmp.Name()) })
+	t.Cleanup(func() { _ = os.Remove(tmp.Name()) })
 
 	store, err := storage.Load(tmp.Name())
 	require.NoError(t, err)
@@ -85,9 +85,10 @@ func TestAddBinaryCmd_Success(t *testing.T) {
 
 	tmpFile, err := os.CreateTemp("", "bin_test_*.bin")
 	require.NoError(t, err)
-	defer os.Remove(tmpFile.Name())
-	tmpFile.Write([]byte{0x01, 0x02, 0x03})
-	tmpFile.Close()
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	_, err = tmpFile.Write([]byte{0x01, 0x02, 0x03})
+	require.NoError(t, err)
+	require.NoError(t, tmpFile.Close())
 
 	cmd := AddBinaryCmd(a)
 	cmd.SetArgs([]string{"--file", tmpFile.Name()})

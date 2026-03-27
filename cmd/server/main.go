@@ -40,7 +40,7 @@ func main() {
 	}
 	defer repo.Close()
 
-	server := gservice.NewServer(repo, cfg.JWTSecret, log)
+	server := gservice.NewServer(repo, repo, gservice.WithJWTSecret(cfg.JWTSecret), gservice.WithLogger(log))
 
 	grpcServer := grpc.NewServer(
 		grpc.UnaryInterceptor(server.AuthInterceptor),

@@ -2,8 +2,10 @@ package storage
 
 import (
 	"encoding/json"
+	"iter"
 	"os"
 	"strings"
+
 	pb "github.com/tigranqic/gophkeeper-diploma/internal/proto/gophkeeperv1"
 )
 
@@ -47,7 +49,7 @@ func (s *LocalStore) Save() error {
 
 // GetRecord returns a record by ID.
 func (s *LocalStore) GetRecord(id string) *pb.EncryptedRecord {
-	for _, r := range s.Records {
+	for r := range s.All() {
 		if r.Id == id {
 			return r
 		}
@@ -55,12 +57,38 @@ func (s *LocalStore) GetRecord(id string) *pb.EncryptedRecord {
 	return nil
 }
 
+// All returns an iterator over every record in the store.
+// Returning iter.Seq keeps callers decoupled from the underlying slice so the
+// storage layout can change without touching every call site.
+func (s *LocalStore) All() iter.Seq[*pb.EncryptedRecord] {
+	return func(yield func(*pb.EncryptedRecord) bool) {
+		for _, r := range s.Records {
+			if !yield(r) {
+				return
+			}
+		}
+	}
+}
+
+// AllIndexed returns an iterator over (index, record) pairs.
+func (s *LocalStore) AllIndexed() iter.Seq2[int, *pb.EncryptedRecord] {
+	return func(yield func(int, *pb.EncryptedRecord) bool) {
+		for i, r := range s.Records {
+			if !yield(i, r) {
+				return
+			}
+		}
+	}
+}
+
 // UpsertRecord updates or inserts a record into the local storage.
 // A server-returned record wins if its UpdatedAt is newer OR its Revision is higher
 // (the revision is only assigned server-side, so a higher revision always means
 // a more authoritative version of the record).
 func (s *LocalStore) UpsertRecord(rec *pb.EncryptedRecord) {
-	for i, r := range s.Records {
+	// AllIndexed yields (position, record) pairs so we can overwrite
+	// the existing slot directly without a second lookup.
+	for i, r := range s.AllIndexed() {
 		if r.Id == rec.Id {
 			if rec.UpdatedAt > r.UpdatedAt || rec.Revision > r.Revision {
 				s.Records[i] = rec

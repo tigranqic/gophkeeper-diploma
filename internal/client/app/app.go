@@ -13,13 +13,17 @@ import (
 // APIClient defines the interface for communicating with the GophKeeper server.
 type APIClient interface {
 	// Register creates a new user account and returns a JWT token.
-	Register(ctx context.Context, username, passwordHash string) (string, error)
+	Register(ctx context.Context, username, passwordHash string, salt []byte) (string, error)
+	// GetSalt retrieves the scrypt salt for the given username.
+	GetSalt(ctx context.Context, username string) ([]byte, error)
 	// Login authenticates an existing user and returns a JWT token.
 	Login(ctx context.Context, username, passwordHash string) (string, error)
 	// SetToken updates the bearer token used for authenticated requests.
 	SetToken(token string)
 	// Sync pushes local records to the server and retrieves updates since lastRevision.
 	Sync(ctx context.Context, records []*pb.EncryptedRecord, lastRevision int64) ([]*pb.EncryptedRecord, int64, error)
+	// Close releases the underlying network connection.
+	Close() error
 }
 
 // App holds the client-side application state shared across all CLI commands.

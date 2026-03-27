@@ -9,8 +9,9 @@ import (
 )
 
 func TestLocalStore_UpsertAndGet(t *testing.T) {
-	tmpFile, _ := os.CreateTemp("", "gophkeeper_test_*.json")
-	defer os.Remove(tmpFile.Name())
+	tmpFile, err := os.CreateTemp("", "gophkeeper_test_*.json")
+	require.NoError(t, err)
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	store, err := Load(tmpFile.Name())
 	require.NoError(t, err)
@@ -34,8 +35,9 @@ func TestLocalStore_UpsertAndGet(t *testing.T) {
 }
 
 func TestLocalStore_SaveAndLoad(t *testing.T) {
-	tmpFile, _ := os.CreateTemp("", "gophkeeper_test_*.json")
-	defer os.Remove(tmpFile.Name())
+	tmpFile, err := os.CreateTemp("", "gophkeeper_test_*.json")
+	require.NoError(t, err)
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	store, err := Load(tmpFile.Name())
 	require.NoError(t, err)
