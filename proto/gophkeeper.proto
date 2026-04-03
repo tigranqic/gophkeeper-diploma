@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package gophkeeper.v1;
+
+option go_package = "github.com/tigranqic/gophkeeper-diploma/internal/proto/gophkeeperv1";
+
+service AuthService {
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  rpc GetSalt(GetSaltRequest) returns (GetSaltResponse);
+  rpc Login(LoginRequest) returns (LoginResponse);
+}
+
+service StorageService {
+  // Sync now returns a stream of records to handle large data volumes safely.
+  rpc Sync(SyncRequest) returns (stream SyncResponse);
+}
+
+message RegisterRequest {
+  string username = 1;
+  string password_hash = 2;
+  bytes salt = 3;
+}
+
+message GetSaltRequest {
+  string username = 1;
+}
+
+message GetSaltResponse {
+  bytes salt = 1;
+}
+
+message RegisterResponse {
+  string token = 1;
+}
+
+message LoginRequest {
+  string username = 1;
+  string password_hash = 2;
+}
+
+message LoginResponse {
+  string token = 1;
+}
+
+enum RecordType {
+  RECORD_TYPE_UNSPECIFIED = 0;
+  RECORD_TYPE_LOGIN = 1;
+  RECORD_TYPE_TEXT = 2;
+  RECORD_TYPE_BINARY = 3;
+  RECORD_TYPE_CARD = 4;
+}
+
+message EncryptedRecord {
+  string id = 1;
+  RecordType type = 2;
+  bytes blob = 3;
+  int64 revision = 4; // Server-side versioning
+  int64 updated_at = 5;
+  bool is_deleted = 6;
+}
+
+message SyncRequest {
+  repeated EncryptedRecord records = 1;
+  int64 last_revision = 2; // Client sends the last seen revision
+}
+
+message SyncResponse {
+  repeated EncryptedRecord records = 1;
+  int64 current_revision = 2;
+}
